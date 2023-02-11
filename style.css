@@ -1,0 +1,54 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f2f2f2;
+    text-align: center;
+  }
+  
+  header nav {
+    background-color: #333;
+    color: #fff;
+    display: inline-block;
+    padding: 10px 20px;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  
+  header nav a {
+    color: #fff;
+    display: inline-block;
+    padding: 10px 20px;
+    text-decoration: none;
+  }
+  
+  header nav a:hover {
+    background-color: #fff;
+    color: #333;
+  }
+  
+  h1, h3, h4 {
+    color: #333;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  
+  #more-about-me {
+    background-color: #fff;
+    border: 1px solid #333;
+    padding: 20px;
+    margin: 20px 0;
+  }
+  
+  #education, #awards, #hobbies, #skills {
+    background-color: #fff;
+    border: 1px solid #333;
+    padding: 20px;
+    margin: 20px 0;
+    text-align: left;
+  }
+  
+  img {
+    display: block;
+    margin: 20px auto;
+    border: 1px solid #333;
+  }
+  
