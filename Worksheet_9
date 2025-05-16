@@ -1,0 +1,542 @@
+{
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/brishashrestha/Portfolio/blob/main/Worksheet_9\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "TDpr6bw7KuHW"
+      },
+      "outputs": [],
+      "source": [
+        "# Mount Google Drive\n",
+        "from google.colab import drive\n",
+        "drive.mount('/content/drive')"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "6g4hhqFnLciL"
+      },
+      "outputs": [],
+      "source": [
+        "# Install required libraries\n",
+        "!pip install wordcloud tensorflow nltk"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "1-aStYQcLegj"
+      },
+      "outputs": [],
+      "source": [
+        "# Import necessary libraries\n",
+        "import numpy as np\n",
+        "import pandas as pd\n",
+        "import matplotlib.pyplot as plt\n",
+        "import re\n",
+        "import nltk\n",
+        "from nltk.corpus import stopwords\n",
+        "from nltk.stem import WordNetLemmatizer\n",
+        "from sklearn.model_selection import train_test_split\n",
+        "from sklearn.metrics import accuracy_score, confusion_matrix, classification_report\n",
+        "from sklearn.preprocessing import LabelEncoder\n",
+        "from tensorflow.keras.preprocessing.text import Tokenizer\n",
+        "from tensorflow.keras.preprocessing.sequence import pad_sequences\n",
+        "from tensorflow.keras.models import Sequential\n",
+        "from tensorflow.keras.layers import Embedding, SimpleRNN, LSTM, Dense\n",
+        "from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping\n",
+        "from wordcloud import WordCloud\n",
+        "\n",
+        "# Download NLTK resources\n",
+        "nltk.download('stopwords')\n",
+        "nltk.download('wordnet')"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "TO_1zd1gLjmm"
+      },
+      "source": [
+        "## **Task 1: Data Preprocessing & Cleaning**"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "7GN58ChULihH"
+      },
+      "outputs": [],
+      "source": [
+        "dataset_path = '/content/drive/MyDrive/AI/trum_tweet_sentiment_analysis.csv'\n",
+        "data = pd.read_csv(dataset_path)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "KVrEzCnq1qV9"
+      },
+      "outputs": [],
+      "source": [
+        "# Verify column names\n",
+        "print(\"Dataset Columns:\", data.columns.tolist())\n",
+        "print(\"\\nFirst few rows of the dataset:\")\n",
+        "print(data.head())\n",
+        "print(\"\\nUnique sentiment values:\", data['Sentiment'].unique())"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "ZRnTgU0s2NiY"
+      },
+      "outputs": [],
+      "source": [
+        "# Define column names\n",
+        "text_column = 'text'\n",
+        "sentiment_column = 'Sentiment'\n",
+        "\n",
+        "# Verify columns exist\n",
+        "if text_column not in data.columns or sentiment_column not in data.columns:\n",
+        "    raise KeyError(f\"One or both columns ('{text_column}', '{sentiment_column}') not found in dataset.\")"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "bDtA9gTyL0p6"
+      },
+      "outputs": [],
+      "source": [
+        "# Preprocessing function\n",
+        "def preprocess_text(text):\n",
+        "    text = str(text).lower()  # Lowercase\n",
+        "    text = re.sub(r'http\\S+|www\\S+|https\\S+', '', text, flags=re.MULTILINE)  # Remove URLs\n",
+        "    text = re.sub(r'@\\w+|\\#\\w+', '', text)  # Remove mentions and hashtags\n",
+        "    text = re.sub(r'[^\\w\\s]', '', text)  # Remove punctuation\n",
+        "    text = re.sub(r'\\d+', '', text)  # Remove numbers\n",
+        "    # Remove stopwords and lemmatize\n",
+        "    stop_words = set(stopwords.words('english'))\n",
+        "    lemmatizer = WordNetLemmatizer()\n",
+        "    tokens = text.split()\n",
+        "    tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]\n",
+        "    return ' '.join(tokens)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "colab": {
+          "background_save": true
+        },
+        "id": "4XjItW5mL26d"
+      },
+      "outputs": [],
+      "source": [
+        "data['cleaned_text'] = data[text_column].apply(preprocess_text)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "colab": {
+          "background_save": true
+        },
+        "id": "WtrDCC_A3j-j",
+        "outputId": "527faecd-eee6-422e-a01c-76c76e38135c"
+      },
+      "outputs": [
+        {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
+            "\n",
+            "Encoded labels: [0 1]\n"
+          ]
+        }
+      ],
+      "source": [
+        "# Encode sentiment labels (0=negative, 1=positive)\n",
+        "label_encoder = LabelEncoder()\n",
+        "data['sentiment_encoded'] = label_encoder.fit_transform(data[sentiment_column])\n",
+        "print(\"\\nEncoded labels:\", label_encoder.classes_)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "8M-_zfLs3oaI"
+      },
+      "outputs": [],
+      "source": [
+        "# Visualize: Word Cloud\n",
+        "all_words = ' '.join(data['cleaned_text'])\n",
+        "wordcloud = WordCloud(width=800, height=400, background_color='white', max_words=100).generate(all_words)\n",
+        "plt.figure(figsize=(10, 6))\n",
+        "plt.imshow(wordcloud, interpolation='bilinear')\n",
+        "plt.axis('off')\n",
+        "plt.title('Top 100 Most Frequent Words')\n",
+        "plt.show()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "cXmC28Ac3-gf"
+      },
+      "source": [
+        "### **Task 2: Tokenization & Padding**"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "BuJhUE9h37pE"
+      },
+      "outputs": [],
+      "source": [
+        "# Split dataset (80% train, 20% test)\n",
+        "X_train, X_test, y_train, y_test = train_test_split(data['cleaned_text'], data['sentiment_encoded'], test_size=0.2, random_state=42)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "r8nRnhKZ4CJY"
+      },
+      "outputs": [],
+      "source": [
+        "# Tokenization\n",
+        "vocab_size = 10000\n",
+        "tokenizer = Tokenizer(num_words=vocab_size, oov_token='<OOV>')\n",
+        "tokenizer.fit_on_texts(X_train)  # Fit only on training data\n",
+        "X_train_seq = tokenizer.texts_to_sequences(X_train)\n",
+        "X_test_seq = tokenizer.texts_to_sequences(X_test)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "HfXaDx6B4P4H"
+      },
+      "outputs": [],
+      "source": [
+        "# Percentile-based padding\n",
+        "seq_lengths = [len(seq) for seq in X_train_seq]\n",
+        "max_len = int(np.percentile(seq_lengths, 95))  # 95th percentile\n",
+        "X_train_pad = pad_sequences(X_train_seq, maxlen=max_len, padding='post', truncating='post')\n",
+        "X_test_pad = pad_sequences(X_test_seq, maxlen=max_len, padding='post', truncating='post')"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "mAYNEgx54VtB"
+      },
+      "source": [
+        "# === Task 3: Model Building ==="
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "yhPw0dUU4Thz"
+      },
+      "outputs": [],
+      "source": [
+        "# Define function to build models (binary classification)\n",
+        "def build_rnn_model(vocab_size, embedding_dim=128, max_len=max_len):\n",
+        "    model = Sequential([\n",
+        "        Embedding(input_dim=vocab_size, output_dim=embedding_dim, input_length=max_len),\n",
+        "        SimpleRNN(64),\n",
+        "        Dense(1, activation='sigmoid')\n",
+        "    ])\n",
+        "    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])\n",
+        "    return model"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "HNMnCGPJ4YB-"
+      },
+      "outputs": [],
+      "source": [
+        "def build_lstm_model(vocab_size, embedding_dim=128, max_len=max_len):\n",
+        "    model = Sequential([\n",
+        "        Embedding(input_dim=vocab_size, output_dim=embedding_dim, input_length=max_len),\n",
+        "        LSTM(64),\n",
+        "        Dense(1, activation='sigmoid')\n",
+        "    ])\n",
+        "    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])\n",
+        "    return model"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "bNAXhyAt4Zyr"
+      },
+      "outputs": [],
+      "source": [
+        "# Build models\n",
+        "rnn_model = build_rnn_model(vocab_size)\n",
+        "lstm_model = build_lstm_model(vocab_size)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "KrQ_knuA4b_l"
+      },
+      "source": [
+        "# === Task 4: Training & Evaluation ==="
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "LcF1OrT04dd5"
+      },
+      "outputs": [],
+      "source": [
+        "# Training setup\n",
+        "checkpoint_rnn = ModelCheckpoint('rnn_best_model.h5', monitor='val_accuracy', save_best_only=True, verbose=1)\n",
+        "checkpoint_lstm = ModelCheckpoint('lstm_best_model.h5', monitor='val_accuracy', save_best_only=True, verbose=1)\n",
+        "early_stop = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True, verbose=1)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "zsGhhiXL4hC_"
+      },
+      "outputs": [],
+      "source": [
+        "# Train RNN model\n",
+        "rnn_history = rnn_model.fit(\n",
+        "    X_train_pad, y_train, epochs=10, batch_size=64,\n",
+        "    validation_data=(X_test_pad, y_test), callbacks=[checkpoint_rnn, early_stop]\n",
+        ")"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "lOPRbLuW7_n5"
+      },
+      "outputs": [],
+      "source": [
+        "# Train LSTM model\n",
+        "lstm_history = lstm_model.fit(\n",
+        "    X_train_pad, y_train, epochs=10, batch_size=64,\n",
+        "    validation_data=(X_test_pad, y_test), callbacks=[checkpoint_lstm, early_stop]\n",
+        ")"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "FLUnlZlkBrZe"
+      },
+      "outputs": [],
+      "source": [
+        "# Evaluate models\n",
+        "def evaluate_model(model, X_test_pad, y_test, label_encoder):\n",
+        "    y_pred = model.predict(X_test_pad)\n",
+        "    y_pred_classes = (y_pred > 0.5).astype(int).flatten()\n",
+        "    accuracy = accuracy_score(y_test, y_pred_classes)\n",
+        "    cm = confusion_matrix(y_test, y_pred_classes)\n",
+        "    # Convert label_encoder.classes_ to strings to avoid TypeError\n",
+        "    target_names = [str(cls) for cls in label_encoder.classes_]  # Convert 0, 1 to \"0\", \"1\"\n",
+        "    cr = classification_report(y_test, y_pred_classes, target_names=target_names)\n",
+        "    print(f\"Accuracy: {accuracy:.4f}\")\n",
+        "    print(\"Confusion Matrix:\\n\", cm)\n",
+        "    print(\"Classification Report:\\n\", cr)\n",
+        "    return accuracy, cm, cr"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "Sbm2uT1-Br_y"
+      },
+      "outputs": [],
+      "source": [
+        "print(\"\\nRNN Model Evaluation:\")\n",
+        "rnn_eval = evaluate_model(rnn_model, X_test_pad, y_test, label_encoder)\n",
+        "\n",
+        "print(\"\\nLSTM Model Evaluation:\")\n",
+        "lstm_eval = evaluate_model(lstm_model, X_test_pad, y_test, label_encoder)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "Y18T-Gb2Bu8B"
+      },
+      "source": [
+        "# === Task 5: Visualization ==="
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "fgi63bIeBtlQ"
+      },
+      "outputs": [],
+      "source": [
+        "# Plot training vs validation loss\n",
+        "plt.figure(figsize=(12, 5))\n",
+        "\n",
+        "# RNN\n",
+        "plt.subplot(1, 2, 1)\n",
+        "plt.plot(rnn_history.history['loss'], label='RNN Train Loss')\n",
+        "plt.plot(rnn_history.history['val_loss'], label='RNN Val Loss')\n",
+        "plt.title('RNN Loss')\n",
+        "plt.xlabel('Epoch')\n",
+        "plt.ylabel('Loss')\n",
+        "plt.legend()\n",
+        "\n",
+        "# LSTM\n",
+        "plt.subplot(1, 2, 2)\n",
+        "plt.plot(lstm_history.history['loss'], label='LSTM Train Loss')\n",
+        "plt.plot(lstm_history.history['val_loss'], label='LSTM Val Loss')\n",
+        "plt.title('LSTM Loss')\n",
+        "plt.xlabel('Epoch')\n",
+        "plt.ylabel('Loss')\n",
+        "plt.legend()\n",
+        "\n",
+        "plt.tight_layout()\n",
+        "plt.show()"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "e1cOHjqcBz3s"
+      },
+      "outputs": [],
+      "source": [
+        "# Plot accuracy\n",
+        "plt.figure(figsize=(12, 5))\n",
+        "\n",
+        "# RNN\n",
+        "plt.subplot(1, 2, 1)\n",
+        "plt.plot(rnn_history.history['accuracy'], label='RNN Train Accuracy')\n",
+        "plt.plot(rnn_history.history['val_accuracy'], label='RNN Val Accuracy')\n",
+        "plt.title('RNN Accuracy')\n",
+        "plt.xlabel('Epoch')\n",
+        "plt.ylabel('Accuracy')\n",
+        "plt.legend()\n",
+        "\n",
+        "# LSTM\n",
+        "plt.subplot(1, 2, 2)\n",
+        "plt.plot(lstm_history.history['accuracy'], label='LSTM Train Accuracy')\n",
+        "plt.plot(lstm_history.history['val_accuracy'], label='LSTM Val Accuracy')\n",
+        "plt.title('LSTM Accuracy')\n",
+        "plt.xlabel('Epoch')\n",
+        "plt.ylabel('Accuracy')\n",
+        "plt.legend()\n",
+        "\n",
+        "plt.tight_layout()\n",
+        "plt.show()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "o16lmWeQB4F9"
+      },
+      "source": [
+        "# === Task 6: Real-Time Prediction (Colab Input) ==="
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "STtvxNBDB2XG"
+      },
+      "outputs": [],
+      "source": [
+        "# Function for real-time prediction\n",
+        "def predict_sentiment(text, tokenizer, model, max_len, label_encoder):\n",
+        "    # Clean and preprocess text\n",
+        "    cleaned_text = preprocess_text(text)\n",
+        "    # Tokenize and pad\n",
+        "    seq = tokenizer.texts_to_sequences([cleaned_text])\n",
+        "    padded = pad_sequences(seq, maxlen=max_len, padding='post', truncating='post')\n",
+        "    # Predict\n",
+        "    pred = model.predict(padded)\n",
+        "    pred_class = (pred > 0.5).astype(int)[0][0]\n",
+        "    return label_encoder.inverse_transform([pred_class])[0]\n",
+        "\n",
+        "# Interactive prediction in Colab\n",
+        "print(\"\\nEnter a tweet for sentiment prediction (type 'exit' to stop):\")\n",
+        "while True:\n",
+        "    user_input = input(\"Tweet: \")\n",
+        "    if user_input.lower() == 'exit':\n",
+        "        break\n",
+        "    if user_input.strip() == '':\n",
+        "        print(\"Please enter a valid tweet.\")\n",
+        "        continue\n",
+        "    # Predict with LSTM model (you can switch to rnn_model)\n",
+        "    sentiment = predict_sentiment(user_input, tokenizer, lstm_model, max_len, label_encoder)\n",
+        "    print(f\"Predicted Sentiment: {sentiment}\")"
+      ]
+    }
+  ],
+  "metadata": {
+    "accelerator": "GPU",
+    "colab": {
+      "gpuType": "T4",
+      "provenance": [],
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "display_name": "Python 3",
+      "name": "python3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 0
+}
